@@ -9,7 +9,7 @@ This extensions provides syntax highlight, definitions navigation and build and 
 
 ## Installing
 ```sh
-	code --install-extension uvalang-0.1.0.vsix
+	code --install-extension uvalang-0.1.1.vsix
 ```
 
 ## Dependencies
@@ -20,6 +20,10 @@ This extensions provides syntax highlight, definitions navigation and build and 
 [uvalang](https://github.com/andrey-moura/uva-lang)
 
 ## Release Notes
+
+### 0.1.1
+
+Use uvalang-analyser instead of uvalang-analyzer
 
 ### 0.1.0
 
