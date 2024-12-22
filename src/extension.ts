@@ -222,12 +222,16 @@ function updateDecorations(analyserServer: AnalyserServer) {
 		for(const declaration of analyserResult.declarations) {
 			//console.log(`decoring declaration for ${declaration.name} at ${JSON.stringify(declaration.location)}...`);
 
+			if(editor.document.fileName == declaration.location.file) {
 			ranges.push(referenceRange(editor, declaration.location, declaration.name));
+			}
 
 			for(const reference of declaration.references) {
 				//console.log(`decorating reference ${JSON.stringify(reference)}...`);
 
+				if(editor.document.fileName == reference.file) {
 				ranges.push(referenceRange(editor, reference, declaration.name));
+				}
 			}
 		}
 
