@@ -26,7 +26,7 @@
 			"patterns": [
 				{
 					"name": "keyword.control.uva",
-					"match": "\\b(if|while|break|for|foreach|in|return)\\b"
+					"match": "\\b(if|while|break|for|foreach|in|return|new)\\b"
 				},
 				{
 					"name": "storage.type.class.uva",
