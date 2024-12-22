@@ -35,7 +35,7 @@ class Declaration {
 	}
 };
 
-class AnalyserResult {
+class AnalyzerResult {
 	declarations: Declaration[];
 
 	constructor(declarations: Declaration[]) {
@@ -43,7 +43,7 @@ class AnalyserResult {
 	}
 };
 
-class AnalyserServer {
+class AnalyzerServer {
 	private executable?: cp.ChildProcess;
 	public onError?: (error: Error) => void;
 
@@ -53,7 +53,7 @@ class AnalyserServer {
 	launch() {
 		const start = Date.now();
 
-		this.executable = cp.spawn('uvalang-analyser', ["--server"]);
+		this.executable = cp.spawn('uvalang-analyzer', ["--server"]);
 
 		if(!this.executable || !this.executable.pid) {
 			return false;
@@ -61,7 +61,7 @@ class AnalyserServer {
 
 		const end = Date.now();
 
-		console.log('uvalang-analyser server started in ' + (end - start) + 'ms');
+		console.log('uvalang-analyzer server started in ' + (end - start) + 'ms');
 
 		this.executable.on('close', (code) => {
 			this.throwErrorAtServer(`Exited with code ${code}`);
@@ -70,12 +70,12 @@ class AnalyserServer {
 		return true;
 	}
 
-	analyse(document: vscode.TextDocument) : Promise<AnalyserResult> {
+	analyse(document: vscode.TextDocument) : Promise<AnalyzerResult> {
 		if(document.languageId !== 'uva') {
 			console.log("anlyse cancel, not uva language");
 
-			return new Promise<AnalyserResult>((resolve, reject) => {
-				resolve(new AnalyserResult([]));
+			return new Promise<AnalyzerResult>((resolve, reject) => {
+				resolve(new AnalyzerResult([]));
 			});
 		}
 
@@ -90,13 +90,13 @@ class AnalyserServer {
 		var command = [document.fileName, tmpFileName];
 
 		if(!this.writeCommand(command)) {
-			return new Promise<AnalyserResult>((resolve, reject) => {
+			return new Promise<AnalyzerResult>((resolve, reject) => {
 				this.throwErrorAtServer('unable to write command');
 				reject(new Error('unable to write command'));
 			});
 		}
 
-		return new Promise<AnalyserResult>((resolve, reject) => {
+		return new Promise<AnalyzerResult>((resolve, reject) => {
 			const onData = (data: Buffer) => {
 				const end = Date.now();
 				const elapsed = end - now;
@@ -110,18 +110,18 @@ class AnalyserServer {
 			
 				console.log(`${command} success in ${elapsed}ms (reported ${result.elapsed})`);
 
-				const analyserResult = new AnalyserResult([]);
+				const analyzerResult = new AnalyzerResult([]);
 				
 				for(const declaration of result.declarations) {
 					const location = new Location(declaration.location.file, declaration.location.line, declaration.location.column, declaration.location.offset);
 					const references = declaration.references.map((reference: any) => new Location(reference.file, reference.line, reference.column, reference.offset));
 	
-					analyserResult.declarations.push(new Declaration(declaration.name, location, references));
+					analyzerResult.declarations.push(new Declaration(declaration.name, location, references));
 				}
 
 				this.executable?.stdout?.off('data', onData);
 
-				resolve(analyserResult);
+				resolve(analyzerResult);
 			}
 
 			const onError = (error: Error) => {
@@ -156,10 +156,10 @@ class AnalyserServer {
 };
 
 class MyDefinitionProvider implements vscode.DefinitionProvider {
-	private analyserServer: AnalyserServer;
+	private analyzerServer: AnalyzerServer;
 
-    constructor(analyserServer: AnalyserServer) {
-		this.analyserServer = analyserServer;
+    constructor(analyzerServer: AnalyzerServer) {
+		this.analyzerServer = analyzerServer;
     }
 
     provideDefinition(
@@ -177,10 +177,10 @@ class MyDefinitionProvider implements vscode.DefinitionProvider {
 
         const word = document.getText(wordRange);
 
-		return this.analyserServer.analyse(document).then((analyserResult) => {
-			//console.log(`analyserResult: ${JSON.stringify(analyserResult)}`);
+		return this.analyzerServer.analyse(document).then((analyzerResult) => {
+			//console.log(`analyzerResult: ${JSON.stringify(analyzerResult)}`);
 
-			for(const declaration of analyserResult.declarations) {
+			for(const declaration of analyzerResult.declarations) {
 				if(declaration.name === word) {
 					const startPos = new vscode.Position(declaration.location.line, declaration.location.column);
 					const endPos = new vscode.Position(declaration.location.line, declaration.location.column + declaration.name.length);
@@ -209,28 +209,28 @@ const classDecorationType = vscode.window.createTextEditorDecorationType({
 	textDecoration: 'none',
 });
 
-function updateDecorations(analyserServer: AnalyserServer) {
+function updateDecorations(analyzerServer: AnalyzerServer) {
 	console.log('updateDecorations...');
 
 	const editor = vscode.window.activeTextEditor;
 
 	if(!editor) return;
 
-	analyserServer.analyse(editor.document).then((analyserResult) => {
+	analyzerServer.analyse(editor.document).then((analyzerResult) => {
 		var ranges = [];
 
-		for(const declaration of analyserResult.declarations) {
+		for(const declaration of analyzerResult.declarations) {
 			//console.log(`decoring declaration for ${declaration.name} at ${JSON.stringify(declaration.location)}...`);
 
 			if(editor.document.fileName == declaration.location.file) {
-			ranges.push(referenceRange(editor, declaration.location, declaration.name));
+				ranges.push(referenceRange(editor, declaration.location, declaration.name));
 			}
 
 			for(const reference of declaration.references) {
 				//console.log(`decorating reference ${JSON.stringify(reference)}...`);
 
 				if(editor.document.fileName == reference.file) {
-				ranges.push(referenceRange(editor, reference, declaration.name));
+					ranges.push(referenceRange(editor, reference, declaration.name));
 				}
 			}
 		}
@@ -243,21 +243,21 @@ function updateDecorations(analyserServer: AnalyserServer) {
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 
-	var analyserServer = new AnalyserServer();
+	var analyzerServer = new AnalyzerServer();
 
 	var onError = (error: Error) => {
 
 		vscode.window.showErrorMessage(`${error.message}. The server will be restarted.`);
 
 		setTimeout(() => {
-		analyserServer = new AnalyserServer();
-			analyserServer.onError = onError;
-		analyserServer.launch();
+		analyzerServer = new AnalyzerServer();
+			analyzerServer.onError = onError;
+		analyzerServer.launch();
 		}, 3000);
 	};
 
-	if(!analyserServer.launch()) {
-		const message = "Unable to start analyser server. Make sure uvalang-analyser is installed and is in your PATH. If you have just installed it, you may need to restart Visual Studio Code or your computer.";
+	if(!analyzerServer.launch()) {
+		const message = "Unable to start analyzer server. Make sure uvalang-analyzer is installed and is in your PATH. If you have just installed it, you may need to restart Visual Studio Code or your computer.";
 		
 		vscode.window.showErrorMessage(message, 'Retry').then((value) => {
 			if(value === 'Retry') {
@@ -271,11 +271,11 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	// Note: Error is only handled if the server could be started
-	analyserServer.onError = onError;
+	analyzerServer.onError = onError;
 
 	const updateCurrentDocumentDecorations = () => {
-		if(analyserServer) {
-			updateDecorations(analyserServer);
+		if(analyzerServer) {
+			updateDecorations(analyzerServer);
 		}
 	}
 
@@ -287,7 +287,7 @@ export function activate(context: vscode.ExtensionContext) {
 		updateCurrentDocumentDecorations();
 	});
 
-	const registerDefinitionProvider = vscode.languages.registerDefinitionProvider({ scheme: 'file', language: 'uva' }, new MyDefinitionProvider(analyserServer));
+	const registerDefinitionProvider = vscode.languages.registerDefinitionProvider({ scheme: 'file', language: 'uva' }, new MyDefinitionProvider(analyzerServer));
 
 	context.subscriptions.push(onDidChangeActiveTextEditor, onDidChangeTextDocument, registerDefinitionProvider);
 
