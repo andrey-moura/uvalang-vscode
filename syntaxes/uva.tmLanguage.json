@@ -6,6 +6,9 @@
 			"include": "#comments"
 		},
 		{
+			"include": "#preprocessor"
+		},
+		{
 			"include": "#literals"
 		},
 		{
@@ -76,6 +79,14 @@
 				{
 					"name": "constant.character.escape.uva",
 					"match": "\\\\."
+				}
+			]
+		},
+		"preprocessor": {
+			"patterns": [
+				{
+					"name": "keyword.control.preprocessor.uva",
+					"match": "#\\w+"
 				}
 			]
 		}
