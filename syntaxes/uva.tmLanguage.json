@@ -18,7 +18,10 @@
 			"include": "#keywords"
 		},
 		{
-			"include": "#strings"
+			"include": "#single-quoted-strings"
+		},
+		{
+			"include": "#double-quoted-strings"
 		}
 	],
 	"repository": {
@@ -71,7 +74,12 @@
 				}
 			]
 		},
-		"strings": {
+		"single-quoted-strings": {
+			"name": "string.single.double.uva",
+			"begin": "'",
+			"end": "'"
+		},
+		"double-quoted-strings": {
 			"name": "string.quoted.double.uva",
 			"begin": "\"",
 			"end": "\"",
