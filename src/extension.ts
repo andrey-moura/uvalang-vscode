@@ -14,12 +14,14 @@ class Location {
 	line: number;
 	column: number;
 	offset: number;
+	length: number;
 
-	constructor(file: string, line: number, column: number, offset: number) {
+	constructor(file: string, line: number, column: number, offset: number, length: number = 0) {
 		this.file = file;
 		this.line = line;
 		this.column = column;
 		this.offset = offset;
+		this.length = length;
 	}
 }
 
@@ -35,11 +37,25 @@ class Declaration {
 	}
 };
 
+class LinterWarning {
+	message: string;
+	type: string;
+	location: Location;
+
+	constructor(message: string, type: string, location: any) {
+		this.message = message;
+		this.type = type;
+		this.location = location;
+	}
+}
+
 class AnalyzerResult {
 	declarations: Declaration[];
+	linter:       LinterWarning[];
 
-	constructor(declarations: Declaration[]) {
+	constructor(declarations: Declaration[], linter: LinterWarning[] = []) {
 		this.declarations = [];
+		this.linter = [];
 	}
 };
 
@@ -105,6 +121,7 @@ class AnalyzerServer {
 					var result = JSON.parse(data.toString());
 				} catch(e) {
 					console.log(`error parsing JSON: ${e}`);
+					console.log(`data: ${data.toString()}`);
 					return;
 				}
 			
@@ -117,6 +134,14 @@ class AnalyzerServer {
 					const references = declaration.references.map((reference: any) => new Location(reference.file, reference.line, reference.column, reference.offset));
 	
 					analyzerResult.declarations.push(new Declaration(declaration.name, location, references));
+				}
+
+				for(const warning of result.linter) {
+					console.log(`warning: ${JSON.stringify(warning)}`);
+
+					const location = new Location(warning.location.file, warning.location.line, warning.location.column, warning.location.offset, warning.location.length);
+	
+					analyzerResult.linter.push(new LinterWarning(warning.message, warning.type, location));
 				}
 
 				this.executable?.stdout?.off('data', onData);
@@ -209,8 +234,10 @@ const classDecorationType = vscode.window.createTextEditorDecorationType({
 	textDecoration: 'none',
 });
 
+const diagnosticCollection = vscode.languages.createDiagnosticCollection('meuLinter');
+
 function updateDecorations(analyzerServer: AnalyzerServer) {
-	console.log('updateDecorations...');
+	console.log('updateDecorations4...');
 
 	const editor = vscode.window.activeTextEditor;
 
@@ -220,7 +247,7 @@ function updateDecorations(analyzerServer: AnalyzerServer) {
 		var ranges = [];
 
 		for(const declaration of analyzerResult.declarations) {
-			//console.log(`decoring declaration for ${declaration.name} at ${JSON.stringify(declaration.location)}...`);
+			console.log(`decoring declaration for ${declaration.name} at ${JSON.stringify(declaration.location)}...`);
 
 			if(editor.document.fileName == declaration.location.file) {
 				ranges.push(referenceRange(editor, declaration.location, declaration.name));
@@ -236,12 +263,47 @@ function updateDecorations(analyzerServer: AnalyzerServer) {
 		}
 
 		editor.setDecorations(classDecorationType, ranges);
+
+		diagnosticCollection.clear();
+		var diagnostics = new Map<string, vscode.Diagnostic[]>();
+
+		for(let i = 0; i < analyzerResult.linter.length; i++) {
+			var warning = analyzerResult.linter[i];
+			const range = new vscode.Range(
+				new vscode.Position(warning.location.line, warning.location.column), // Início do aviso
+				new vscode.Position(warning.location.line, warning.location.column + warning.location.length) // Fim do aviso
+			);
+			const diagnostic = new vscode.Diagnostic(
+				range,
+				warning.message,
+				vscode.DiagnosticSeverity.Information
+			);
+
+			var array = diagnostics.get(warning.location.file);
+
+			if(!array) {
+				array = [];
+				console.log(`new array for ${warning.location.file}`);
+			}
+
+			array.push(diagnostic);
+
+			diagnostics.set(warning.location.file, array);
+		};
+
+		console.log(`diagnostics: ${diagnostics.size}`);
+
+		diagnostics.forEach((value, key) => {
+			console.log(`diagnostics for ${key}: ${value.length}`);
+			diagnosticCollection.set(vscode.Uri.file(key), value);
+		});
 	});
 };
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+	console.log('uvalang-analyzer extension activated');
 
 	var analyzerServer = new AnalyzerServer();
 
