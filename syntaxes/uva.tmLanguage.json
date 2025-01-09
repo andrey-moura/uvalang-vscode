@@ -12,10 +12,10 @@
 			"include": "#literals"
 		},
 		{
-			"include": "#function-calls"
+			"include": "#keywords"
 		},
 		{
-			"include": "#keywords"
+			"include": "#function-calls"
 		},
 		{
 			"include": "#single-quoted-strings"
