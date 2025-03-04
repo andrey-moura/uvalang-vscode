@@ -1,6 +1,6 @@
 {
 	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-	"name": "uva",
+	"name": "andy",
 	"patterns": [
 		{
 			"include": "#comments"
@@ -28,15 +28,15 @@
 		"keywords": {
 			"patterns": [
 				{
-					"name": "keyword.control.uva",
+					"name": "keyword.control.andy",
 					"match": "\\b(if|while|break|for|foreach|in|return|new)\\b"
 				},
 				{
-					"name": "storage.type.class.uva",
+					"name": "storage.type.class.andy",
 					"match": "\\b(class|extends)\\b"
 				},
 				{
-					"name": "storage.type.function.uva",
+					"name": "storage.type.function.andy",
 					"match": "\\b(function)\\b"
 				}
 			]
@@ -44,11 +44,11 @@
 		"literals": {
 			"patterns": [
 				{
-					"name": "constant.numeric.uva",
+					"name": "constant.numeric.andy",
 					"match": "\\b\\d+(\\.\\d+)?\\b"
 				},
 				{
-					"name": "constant.language.boolean.uva",
+					"name": "constant.language.boolean.andy",
 					"match": "\\b(var|true|false|null)\\b"
 				}
 			]
@@ -56,7 +56,7 @@
 		"function-calls": {
 			"patterns": [
 				{
-					"name": "entity.name.function.call.uva",
+					"name": "entity.name.function.call.andy",
 					"match": "\\b([a-zA-Z][a-zA-Z0-9_]*[!?]?)\\s*(?=([\\?\\!]))|([a-zA-Z][a-zA-Z0-9_]*[!?]?)\\s*(?=(\\())\\b"
 				}
 			]
@@ -64,28 +64,28 @@
 		"comments": {
 			"patterns": [
 				{
-					"name": "comment.line.double-slash.uva",
+					"name": "comment.line.double-slash.andy",
 					"match": "//.*"
 				},
 				{
-					"name": "comment.block.uva",
+					"name": "comment.block.andy",
 					"begin": "/\\*",
 					"end": "\\*/"
 				}
 			]
 		},
 		"single-quoted-strings": {
-			"name": "string.single.double.uva",
+			"name": "string.single.double.andy",
 			"begin": "'",
 			"end": "'"
 		},
 		"double-quoted-strings": {
-			"name": "string.quoted.double.uva",
+			"name": "string.quoted.double.andy",
 			"begin": "\"",
 			"end": "\"",
 			"patterns": [
 				{
-					"name": "constant.character.escape.uva",
+					"name": "constant.character.escape.andy",
 					"match": "\\\\."
 				}
 			]
@@ -93,11 +93,11 @@
 		"preprocessor": {
 			"patterns": [
 				{
-					"name": "keyword.control.preprocessor.uva",
+					"name": "keyword.control.preprocessor.andy",
 					"match": "#\\w+"
 				}
 			]
 		}
 	},
-	"scopeName": "source.uva"
+	"scopeName": "source.andy"
 }

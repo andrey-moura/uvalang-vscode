@@ -1,10 +1,10 @@
 {
-  "name": "uvalang",
-  "displayName": "uvalang",
-  "description": "This extensions provides syntax highlight, definitions navigation and build and run features for applications written in uva language.",
+  "name": "andylang",
+  "displayName": "andylang",
+  "description": "This extensions provides syntax highlight, definitions navigation and build and run features for applications written in andy language.",
   "publisher": "andrey-moura",
   "version": "0.1.2",
-  "icon": "resources/uvalang-vscode.png",
+  "icon": "resources/andylang-vscode.png",
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -15,22 +15,22 @@
   "contributes": {
     "languages": [
       {
-        "id": "uva",
+        "id": "andy",
         "aliases": [
-          "uva",
-          "uva"
+          "andy",
+          "andy"
         ],
         "extensions": [
-          ".uva"
+          ".andy"
         ],
         "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
       {
-        "language": "uva",
-        "scopeName": "source.uva",
-        "path": "./syntaxes/uva.tmLanguage.json"
+        "language": "andy",
+        "scopeName": "source.andy",
+        "path": "./syntaxes/andy.tmLanguage.json"
       }
     ]
   },

@@ -49,13 +49,25 @@ class LinterWarning {
 	}
 }
 
+class Token {
+	type: string;
+	location: Location;
+
+	constructor(type: string, location: any) {
+		this.type = type;
+		this.location = location;
+	}
+}
+
 class AnalyzerResult {
+	tokens:       Token[];
 	declarations: Declaration[];
 	linter:       LinterWarning[];
 
 	constructor(declarations: Declaration[], linter: LinterWarning[] = []) {
 		this.declarations = [];
 		this.linter = [];
+		this.tokens = [];
 	}
 };
 
@@ -69,7 +81,7 @@ class AnalyzerServer {
 	launch() {
 		const start = Date.now();
 
-		this.executable = cp.spawn('uvalang-analyzer', ["--server"]);
+		this.executable = cp.spawn('andy-analyzer', ["--server"]);
 
 		if(!this.executable || !this.executable.pid) {
 			return false;
@@ -77,7 +89,7 @@ class AnalyzerServer {
 
 		const end = Date.now();
 
-		console.log('uvalang-analyzer server started in ' + (end - start) + 'ms');
+		console.log('andy-analyzer server started in ' + (end - start) + 'ms');
 
 		this.executable.on('close', (code) => {
 			this.throwErrorAtServer(`Exited with code ${code}`);
@@ -87,8 +99,8 @@ class AnalyzerServer {
 	}
 
 	analyse(document: vscode.TextDocument) : Promise<AnalyzerResult> {
-		if(document.languageId !== 'uva') {
-			console.log("anlyse cancel, not uva language");
+		if(document.languageId !== 'andy') {
+			console.log("anlyse cancel, not andy language");
 
 			return new Promise<AnalyzerResult>((resolve, reject) => {
 				resolve(new AnalyzerResult([]));
@@ -128,6 +140,12 @@ class AnalyzerServer {
 				console.log(`${command} success in ${elapsed}ms (reported ${result.elapsed})`);
 
 				const analyzerResult = new AnalyzerResult([]);
+
+				for(const token of result.tokens) {
+					const location = new Location(token.location.file, token.location.line, token.location.column, token.location.offset, token.location.length);
+	
+					analyzerResult.tokens.push(new Token(token.type, location));
+				}
 				
 				for(const declaration of result.declarations) {
 					const location = new Location(declaration.location.file, declaration.location.line, declaration.location.column, declaration.location.offset);
@@ -237,7 +255,7 @@ const classDecorationType = vscode.window.createTextEditorDecorationType({
 const diagnosticCollection = vscode.languages.createDiagnosticCollection('meuLinter');
 
 function updateDecorations(analyzerServer: AnalyzerServer) {
-	console.log('updateDecorations4...');
+	console.log('updateDecorations7...');
 
 	const editor = vscode.window.activeTextEditor;
 
@@ -303,7 +321,7 @@ function updateDecorations(analyzerServer: AnalyzerServer) {
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-	console.log('uvalang-analyzer extension activated');
+	console.log('andy-analyzer extension activated 3');
 
 	var analyzerServer = new AnalyzerServer();
 
@@ -317,9 +335,9 @@ export function activate(context: vscode.ExtensionContext) {
 		analyzerServer.launch();
 		}, 3000);
 	};
-
+	
 	if(!analyzerServer.launch()) {
-		const message = "Unable to start analyzer server. Make sure uvalang-analyzer is installed and is in your PATH. If you have just installed it, you may need to restart Visual Studio Code or your computer.";
+		const message = "Unable to start analyzer server. Make sure andy-analyzer is installed and is in your PATH. If you have just installed it, you may need to restart Visual Studio Code or your computer.";
 		
 		vscode.window.showErrorMessage(message, 'Retry').then((value) => {
 			if(value === 'Retry') {
@@ -335,6 +353,8 @@ export function activate(context: vscode.ExtensionContext) {
 	// Note: Error is only handled if the server could be started
 	analyzerServer.onError = onError;
 
+	console.log('andy-analyzer server started');
+
 	const updateCurrentDocumentDecorations = () => {
 		if(analyzerServer) {
 			updateDecorations(analyzerServer);
@@ -349,9 +369,32 @@ export function activate(context: vscode.ExtensionContext) {
 		updateCurrentDocumentDecorations();
 	});
 
-	const registerDefinitionProvider = vscode.languages.registerDefinitionProvider({ scheme: 'file', language: 'uva' }, new MyDefinitionProvider(analyzerServer));
+	const registerDefinitionProvider = vscode.languages.registerDefinitionProvider({ scheme: 'file', language: 'andy' }, new MyDefinitionProvider(analyzerServer));
 
 	context.subscriptions.push(onDidChangeActiveTextEditor, onDidChangeTextDocument, registerDefinitionProvider);
+	// const legend = new vscode.SemanticTokensLegend(
+    //     ['comment', 'preprocessor', 'literal', 'keyword' ]
+    // );
+	// const disposable = vscode.languages.registerDocumentSemanticTokensProvider(
+	// 	{ scheme: 'file', language: 'andy' },
+	// 	{
+	// 		provideDocumentSemanticTokens(document: vscode.TextDocument): vscode.ProviderResult<vscode.SemanticTokens> {
+	// 			console.log('provideDocumentSemanticTokens2');
+	// 			return analyzerServer.analyse(document).then((analyzerResult) => {
+	// 				const builder = new vscode.SemanticTokensBuilder();
+
+	// 				for(const token of analyzerResult.tokens) {
+	// 					builder.push(token.location.line, token.location.column, token.location.length, legend.tokenTypes.indexOf(token.type));
+	// 				}
+
+	// 				return builder.build();
+	// 			});
+	// 		}
+	// 	},
+	// 	legend
+	// );
+
+	// context.subscriptions.push(disposable);
 
 	updateCurrentDocumentDecorations();
 }

@@ -1,6 +1,6 @@
-# uvalang-vscode extension
+# andylang-vscode extension
 
-This extensions provides syntax highlight, definitions navigation and build and run features for applications written in uva language.
+This extensions provides syntax highlight, definitions navigation and build and run features for applications written in andy language.
 
 ## Building
 ```sh
@@ -9,7 +9,7 @@ This extensions provides syntax highlight, definitions navigation and build and 
 
 ## Installing
 ```sh
-	code --install-extension uvalang-0.1.2.vsix
+	code --install-extension andylang-0.1.2.vsix
 ```
 
 ## Dependencies
@@ -17,18 +17,18 @@ This extensions provides syntax highlight, definitions navigation and build and 
 	nvm use v21.1.0
 	npm install -g @vscode/vsce
 ```
-[uvalang](https://github.com/andrey-moura/uva-lang)
+[andylang](https://github.com/andrey-moura/andy-lang)
 
 ## Release Notes
 
 ### 0.1.1
 
-Use uvalang-analyser instead of uvalang-analyzer
+Use andylang-analyser instead of andylang-analyzer
 
 ### 0.1.0
 
-First stable realease of uvalang-vscode extension
+First stable realease of andylang-vscode extension
 
 ### 0.0.1
 
-Initial release of uvalang-vscode extension
+Initial release of andylang-vscode extension
