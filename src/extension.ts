@@ -27,17 +27,40 @@ class Location {
 
 class Declaration {
 	name: string;
-	location: Location;
-	references: Location[];
+	location?: Location;
+	type?: string;
 
-	constructor(name: string, location: any, references: any) {
+	constructor(name: string, location: any, type: string = '') {
 		this.name = name;
 		this.location = location;
-		this.references = references;
 	}
 };
 
+class Reference {
+	name: string;
+	type: string;
+	location: Location;
+
+	constructor(name: string, type: string, location: any) {
+		this.name = name;
+		this.type = type;
+		this.location = location;
+	}
+}
+
 class LinterWarning {
+	message: string;
+	type: string;
+	location: Location;
+
+	constructor(message: string, type: string, location: any) {
+		this.message = message;
+		this.type = type;
+		this.location = location;
+	}
+}
+
+class LinterError {
 	message: string;
 	type: string;
 	location: Location;
@@ -62,26 +85,42 @@ class Token {
 class AnalyzerResult {
 	tokens:       Token[];
 	declarations: Declaration[];
+	references:   Reference[];
 	linter:       LinterWarning[];
+	linterErrors: LinterError[];
+	
 
-	constructor(declarations: Declaration[], linter: LinterWarning[] = []) {
+	constructor(declarations: Declaration[], references: Reference[] = [], linter: LinterWarning[] = [], linterErrors: LinterError[] = []) {
 		this.declarations = [];
 		this.linter = [];
 		this.tokens = [];
+		this.linterErrors = [];
+		this.references = references;
 	}
 };
 
 class AnalyzerServer {
 	private executable?: cp.ChildProcess;
+	private executablePath = 'andy-analyzer';
+	private isDebugMode: boolean; 
 	public onError?: (error: Error) => void;
 
-	constructor() {
+	constructor(
+		isDebugMode: boolean = false,
+	)
+	{
+		this.isDebugMode = isDebugMode;
+
+		if (this.isDebugMode) {
+			this.executablePath = path.join(__dirname, '../..', 'andy-lang/build/andy-analyzer');
+			console.log(`andy-analyzer path: ${this.executablePath}`);
+		}
 	}
 
 	launch() {
 		const start = Date.now();
 
-		this.executable = cp.spawn('andy-analyzer', ["--server"]);
+		this.executable = cp.spawn(this.executablePath, ["--server"]);
 
 		if(!this.executable || !this.executable.pid) {
 			return false;
@@ -98,13 +137,11 @@ class AnalyzerServer {
 		return true;
 	}
 
-	analyse(document: vscode.TextDocument) : Promise<AnalyzerResult> {
+	analyse(document: vscode.TextDocument) : AnalyzerResult {
 		if(document.languageId !== 'andy') {
 			console.log("anlyse cancel, not andy language");
 
-			return new Promise<AnalyzerResult>((resolve, reject) => {
-				resolve(new AnalyzerResult([]));
-			});
+			return new AnalyzerResult([]);
 		}
 
 		const now = Date.now();
@@ -118,67 +155,75 @@ class AnalyzerServer {
 		var command = [document.fileName, tmpFileName];
 
 		if(!this.writeCommand(command)) {
-			return new Promise<AnalyzerResult>((resolve, reject) => {
-				this.throwErrorAtServer('unable to write command');
-				reject(new Error('unable to write command'));
-			});
+			this.throwErrorAtServer('unable to write command');
+			return new AnalyzerResult([]);
 		}
 
-		return new Promise<AnalyzerResult>((resolve, reject) => {
-			const onData = (data: Buffer) => {
-				const end = Date.now();
-				const elapsed = end - now;
+		// Read 4 hexa bytes to get the size of the result
+		var len = this.executable?.stdout?.read(8);
 
-				try {
-					var result = JSON.parse(data.toString());
-				} catch(e) {
-					console.log(`error parsing JSON: ${e}`);
-					console.log(`data: ${data.toString()}`);
-					return;
-				}
-			
-				console.log(`${command} success in ${elapsed}ms (reported ${result.elapsed})`);
+		console.log(`len: ${len}`);
 
-				const analyzerResult = new AnalyzerResult([]);
+		// Parses the size of the result
+		if(!len) {
+			this.throwErrorAtServer('unable to read size');
+			return new AnalyzerResult([]);
+		}
 
-				for(const token of result.tokens) {
-					const location = new Location(token.location.file, token.location.line, token.location.column, token.location.offset, token.location.length);
-	
-					analyzerResult.tokens.push(new Token(token.type, location));
-				}
-				
-				for(const declaration of result.declarations) {
-					const location = new Location(declaration.location.file, declaration.location.line, declaration.location.column, declaration.location.offset);
-					const references = declaration.references.map((reference: any) => new Location(reference.file, reference.line, reference.column, reference.offset));
-	
-					analyzerResult.declarations.push(new Declaration(declaration.name, location, references));
-				}
+		const size = parseInt(len.toString(), 16);
 
-				for(const warning of result.linter) {
-					console.log(`warning: ${JSON.stringify(warning)}`);
+		var data = this.executable?.stdout?.read(size);
 
-					const location = new Location(warning.location.file, warning.location.line, warning.location.column, warning.location.offset, warning.location.length);
-	
-					analyzerResult.linter.push(new LinterWarning(warning.message, warning.type, location));
-				}
+		try {
+			var result = JSON.parse(data.toString());
+		} catch(e) {
+			console.log(`error parsing JSON: ${e}`);
+			console.log(`data: ${data.toString()}`);
+			return new AnalyzerResult([]);
+		}
 
-				this.executable?.stdout?.off('data', onData);
+		console.log(`${command} success in ${result.elapsed}`);
 
-				resolve(analyzerResult);
-			}
+		const analyzerResult = new AnalyzerResult([]);
 
-			const onError = (error: Error) => {
-				const end = Date.now();
-				console.log(`analyse canceled ${end - now}ms`);
+		// for(const token of result.tokens) {
+		// 	const location = new Location(token.location.file, token.location.line, token.location.column, token.location.offset, token.location.length);
 
-				this.executable?.stdout?.off('error', onError);
+		// 	analyzerResult.tokens.push(new Token(token.type, location));
+		// }
+		
+		for(const declaration of result.declarations) {
+			//console.log(`declaration: ${JSON.stringify(declaration)}`);
 
-				reject(error);
-			}
+			const location = declaration.location ? new Location(declaration.location.file, declaration.location.line, declaration.location.column, declaration.location.offset) : null;
+			analyzerResult.declarations.push(new Declaration(declaration.name, location, declaration.type));
+		}
 
-			this.executable?.stdout?.on('data', onData);
-			this.executable?.stdout?.on('error', onError);
-		});
+		for(const reference of result.references) {
+			//console.log(`reference: ${JSON.stringify(reference)}`);
+
+			const location = new Location(reference.location.file, reference.location.line, reference.location.column, reference.location.offset);
+
+			analyzerResult.references.push(new Reference(reference.name, reference.type, location));
+		}
+
+		for(const warning of result.linter) {
+			//console.log(`warning: ${JSON.stringify(warning)}`);
+
+			const location = new Location(warning.location.file, warning.location.line, warning.location.column, warning.location.offset, warning.location.length);
+
+			analyzerResult.linter.push(new LinterWarning(warning.message, warning.type, location));
+		}
+
+		for(const error of result.errors) {
+			//console.log(`error: ${JSON.stringify(error)}`);
+
+			const location = new Location(error.location.file, error.location.line, error.location.column, error.location.offset, error.location.length);
+
+			analyzerResult.linterErrors.push(new LinterError(error.message, error.type, location));
+		}
+
+		return analyzerResult;
 	}
 
 	private throwErrorAtServer(message: string) {
@@ -220,21 +265,20 @@ class MyDefinitionProvider implements vscode.DefinitionProvider {
 
         const word = document.getText(wordRange);
 
-		return this.analyzerServer.analyse(document).then((analyzerResult) => {
-			//console.log(`analyzerResult: ${JSON.stringify(analyzerResult)}`);
+		var analyzerResult = this.analyzerServer.analyse(document);
 
-			for(const declaration of analyzerResult.declarations) {
-				if(declaration.name === word) {
+		for(const declaration of analyzerResult.declarations) {
+			if(declaration.name === word) {
+				if(declaration.location) {
 					const startPos = new vscode.Position(declaration.location.line, declaration.location.column);
 					const endPos = new vscode.Position(declaration.location.line, declaration.location.column + declaration.name.length);
 					const range = new vscode.Range(startPos, endPos);
 					const uri = vscode.Uri.file(declaration.location.file);
-
+					
 					return new vscode.Location(uri, range);
 				}
 			}
-
-		});
+		}
     }
 }
 
@@ -248,91 +292,154 @@ function referenceRange(editor: vscode.TextEditor, reference: any, name: string)
 
 const classDecorationType = vscode.window.createTextEditorDecorationType({
 	color: '#4EC9B0',
-	fontWeight: 'bold',
+	textDecoration: 'none',
+});
+
+const functionCallDecorationType = vscode.window.createTextEditorDecorationType({
+	color: '#DCDCAA',
+	textDecoration: 'none',
+});
+
+const variableDecorationType = vscode.window.createTextEditorDecorationType({
+	color: '#9CDCFE',
 	textDecoration: 'none',
 });
 
 const diagnosticCollection = vscode.languages.createDiagnosticCollection('meuLinter');
 
 function updateDecorations(analyzerServer: AnalyzerServer) {
-	console.log('updateDecorations7...');
+	console.log('updateDecorations8...');
 
 	const editor = vscode.window.activeTextEditor;
 
-	if(!editor) return;
+	if(!editor) {
+		console.log('no active editor');
+		return;
+	}
 
-	analyzerServer.analyse(editor.document).then((analyzerResult) => {
-		var ranges = [];
+	var analyzerResult = analyzerServer.analyse(editor.document);
 
-		for(const declaration of analyzerResult.declarations) {
-			console.log(`decoring declaration for ${declaration.name} at ${JSON.stringify(declaration.location)}...`);
+	//console.log('analyze result: ' + JSON.stringify(analyzerResult));
+	var classesRanges = [];
+	var functionCallsRanges = [];
+	var variableRanges = [];
 
+	for(const declaration of analyzerResult.declarations) {
+		// console.log(`decoring declaration for ${declaration.name} at ${JSON.stringify(declaration.location)}...`);
+
+		if(declaration.location) {
 			if(editor.document.fileName == declaration.location.file) {
-				ranges.push(referenceRange(editor, declaration.location, declaration.name));
-			}
-
-			for(const reference of declaration.references) {
-				//console.log(`decorating reference ${JSON.stringify(reference)}...`);
-
-				if(editor.document.fileName == reference.file) {
-					ranges.push(referenceRange(editor, reference, declaration.name));
+				var range = referenceRange(editor, declaration.location, declaration.name);
+				if(declaration.type === 'class') {
+					classesRanges.push(range);
+				} else if(declaration.type === 'function') {
+					functionCallsRanges.push(range);
 				}
 			}
 		}
+	}
 
-		editor.setDecorations(classDecorationType, ranges);
+	for(const reference of analyzerResult.references) {
+		console.log(`decorating reference ${JSON.stringify(reference)}...`);
 
-		diagnosticCollection.clear();
-		var diagnostics = new Map<string, vscode.Diagnostic[]>();
-
-		for(let i = 0; i < analyzerResult.linter.length; i++) {
-			var warning = analyzerResult.linter[i];
-			const range = new vscode.Range(
-				new vscode.Position(warning.location.line, warning.location.column), // Início do aviso
-				new vscode.Position(warning.location.line, warning.location.column + warning.location.length) // Fim do aviso
-			);
-			const diagnostic = new vscode.Diagnostic(
-				range,
-				warning.message,
-				vscode.DiagnosticSeverity.Information
-			);
-
-			var array = diagnostics.get(warning.location.file);
-
-			if(!array) {
-				array = [];
-				console.log(`new array for ${warning.location.file}`);
+		if(editor.document.fileName == reference.location.file) {
+			var range = referenceRange(editor, reference.location, reference.name);
+			if(reference.type === 'class') {
+				classesRanges.push(range);
+			} else if(reference.type === 'function') {
+				functionCallsRanges.push(range);
+			} else if(reference.type === 'variable') {
+				variableRanges.push(range);
 			}
+		}
+	}
 
-			array.push(diagnostic);
+	editor.setDecorations(classDecorationType, classesRanges);
+	editor.setDecorations(functionCallDecorationType, functionCallsRanges);
+	editor.setDecorations(variableDecorationType, variableRanges);
 
-			diagnostics.set(warning.location.file, array);
-		};
+	diagnosticCollection.clear();
+	var diagnostics = new Map<string, vscode.Diagnostic[]>();
 
-		console.log(`diagnostics: ${diagnostics.size}`);
+	for(let i = 0; i < analyzerResult.linter.length; i++) {
+		var warning = analyzerResult.linter[i];
+		const range = new vscode.Range(
+			new vscode.Position(warning.location.line, warning.location.column), // Início do aviso
+			new vscode.Position(warning.location.line, warning.location.column + warning.location.length) // Fim do aviso
+		);
+		const diagnostic = new vscode.Diagnostic(
+			range,
+			warning.message,
+			vscode.DiagnosticSeverity.Information
+		);
 
-		diagnostics.forEach((value, key) => {
-			console.log(`diagnostics for ${key}: ${value.length}`);
-			diagnosticCollection.set(vscode.Uri.file(key), value);
-		});
+		var array = diagnostics.get(warning.location.file);
+
+		if(!array) {
+			array = [];
+			console.log(`new array for ${warning.location.file}`);
+		}
+
+		array.push(diagnostic);
+
+		diagnostics.set(warning.location.file, array);
+	};
+	console.log(`errors: ${analyzerResult.linterErrors.length}`);
+	for(let i = 0; i < analyzerResult.linterErrors.length; i++) {
+		var error = analyzerResult.linterErrors[i];
+		const range = new vscode.Range(
+			new vscode.Position(error.location.line, error.location.column), // Início do aviso
+			new vscode.Position(error.location.line, error.location.column + error.location.length) // Fim do aviso
+		);
+		const diagnostic = new vscode.Diagnostic(
+			range,
+			error.message,
+			vscode.DiagnosticSeverity.Error
+		);
+
+		var array = diagnostics.get(error.location.file);
+
+		if(!array) {
+			array = [];
+			//console.log(`new array for ${error.location.file}`);
+		}
+
+		array.push(diagnostic);
+
+		diagnostics.set(error.location.file, array);
+	};
+
+	//console.log(`diagnostics: ${diagnostics.size}`);
+
+	diagnostics.forEach((value, key) => {
+		//console.log(`diagnostics for ${key}: ${value.length}`);
+		diagnosticCollection.set(vscode.Uri.file(key), value);
 	});
 };
+
+function setIntervalToUpdateDecorations(analyzerServer: AnalyzerServer) {
+	setTimeout(() => {
+		if(analyzerServer) {
+			updateDecorations(analyzerServer);
+		}
+		setIntervalToUpdateDecorations(analyzerServer);
+	}, 1000);
+}
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-	console.log('andy-analyzer extension activated 3');
-
-	var analyzerServer = new AnalyzerServer();
+	console.log('andy-analyzer extension activated 5');
+	var analyzerServer = new AnalyzerServer(context.extensionMode === vscode.ExtensionMode.Development);
 
 	var onError = (error: Error) => {
 
 		vscode.window.showErrorMessage(`${error.message}. The server will be restarted.`);
 
 		setTimeout(() => {
-		analyzerServer = new AnalyzerServer();
+			analyzerServer = new AnalyzerServer(context.extensionMode === vscode.ExtensionMode.Development);
 			analyzerServer.onError = onError;
-		analyzerServer.launch();
+			analyzerServer.launch();
 		}, 3000);
 	};
 	
@@ -355,23 +462,20 @@ export function activate(context: vscode.ExtensionContext) {
 
 	console.log('andy-analyzer server started');
 
-	const updateCurrentDocumentDecorations = () => {
-		if(analyzerServer) {
-			updateDecorations(analyzerServer);
-		}
-	}
+	// const onDidChangeActiveTextEditor = vscode.window.onDidChangeActiveTextEditor((editor) => {
+	// 	updateCurrentDocumentDecorations();
+	// });
 
-	const onDidChangeActiveTextEditor = vscode.window.onDidChangeActiveTextEditor((editor) => {
-		updateCurrentDocumentDecorations();
-	});
+	// const onDidChangeTextDocument = vscode.workspace.onDidChangeTextDocument((event) => {
+	// 	updateCurrentDocumentDecorations();
+	// });
 
-	const onDidChangeTextDocument = vscode.workspace.onDidChangeTextDocument((event) => {
-		updateCurrentDocumentDecorations();
-	});
+	//context.subscriptions.push(onDidChangeActiveTextEditor, onDidChangeTextDocument, registerDefinitionProvider);
+
+	setIntervalToUpdateDecorations(analyzerServer);
 
 	const registerDefinitionProvider = vscode.languages.registerDefinitionProvider({ scheme: 'file', language: 'andy' }, new MyDefinitionProvider(analyzerServer));
 
-	context.subscriptions.push(onDidChangeActiveTextEditor, onDidChangeTextDocument, registerDefinitionProvider);
 	// const legend = new vscode.SemanticTokensLegend(
     //     ['comment', 'preprocessor', 'literal', 'keyword' ]
     // );
@@ -395,8 +499,6 @@ export function activate(context: vscode.ExtensionContext) {
 	// );
 
 	// context.subscriptions.push(disposable);
-
-	updateCurrentDocumentDecorations();
 }
 
 // This method is called when your extension is deactivated
