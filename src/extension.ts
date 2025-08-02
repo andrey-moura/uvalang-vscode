@@ -5,7 +5,7 @@ import * as cp from "child_process";
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-
+import { once } from 'events';
 import { off } from 'process';
 import { buffer } from 'stream/consumers';
 
@@ -74,10 +74,12 @@ class LinterError {
 
 class Token {
 	type: string;
+	modifier: string;
 	location: Location;
 
-	constructor(type: string, location: any) {
+	constructor(type: string, modifier: string, location: any) {
 		this.type = type;
+		this.modifier = modifier;
 		this.location = location;
 	}
 }
@@ -109,6 +111,7 @@ class AnalyzerServer {
 		isDebugMode: boolean = false,
 	)
 	{
+		console.log(`Creating AnalyzerServer in ${isDebugMode ? 'debug' : 'release'} mode`)
 		this.isDebugMode = isDebugMode;
 
 		if (this.isDebugMode) {
@@ -186,11 +189,11 @@ class AnalyzerServer {
 
 		const analyzerResult = new AnalyzerResult([]);
 
-		// for(const token of result.tokens) {
-		// 	const location = new Location(token.location.file, token.location.line, token.location.column, token.location.offset, token.location.length);
+		for(const token of result.tokens) {
+			const location = new Location(token.location.file, token.location.line, token.location.column, token.location.offset, token.location.length);
 
-		// 	analyzerResult.tokens.push(new Token(token.type, location));
-		// }
+			analyzerResult.tokens.push(new Token(token.type, token.modifier, location));
+		}
 		
 		for(const declaration of result.declarations) {
 			//console.log(`declaration: ${JSON.stringify(declaration)}`);
@@ -310,126 +313,14 @@ const diagnosticCollection = vscode.languages.createDiagnosticCollection('meuLin
 function updateDecorations(analyzerServer: AnalyzerServer) {
 	console.log('updateDecorations8...');
 
-	const editor = vscode.window.activeTextEditor;
 
-	if(!editor) {
-		console.log('no active editor');
-		return;
-	}
-
-	var analyzerResult = analyzerServer.analyse(editor.document);
-
-	//console.log('analyze result: ' + JSON.stringify(analyzerResult));
-	var classesRanges = [];
-	var functionCallsRanges = [];
-	var variableRanges = [];
-
-	for(const declaration of analyzerResult.declarations) {
-		// console.log(`decoring declaration for ${declaration.name} at ${JSON.stringify(declaration.location)}...`);
-
-		if(declaration.location) {
-			if(editor.document.fileName == declaration.location.file) {
-				var range = referenceRange(editor, declaration.location, declaration.name);
-				if(declaration.type === 'class') {
-					classesRanges.push(range);
-				} else if(declaration.type === 'function') {
-					functionCallsRanges.push(range);
-				}
-			}
-		}
-	}
-
-	for(const reference of analyzerResult.references) {
-		console.log(`decorating reference ${JSON.stringify(reference)}...`);
-
-		if(editor.document.fileName == reference.location.file) {
-			var range = referenceRange(editor, reference.location, reference.name);
-			if(reference.type === 'class') {
-				classesRanges.push(range);
-			} else if(reference.type === 'function') {
-				functionCallsRanges.push(range);
-			} else if(reference.type === 'variable') {
-				variableRanges.push(range);
-			}
-		}
-	}
-
-	editor.setDecorations(classDecorationType, classesRanges);
-	editor.setDecorations(functionCallDecorationType, functionCallsRanges);
-	editor.setDecorations(variableDecorationType, variableRanges);
-
-	diagnosticCollection.clear();
-	var diagnostics = new Map<string, vscode.Diagnostic[]>();
-
-	for(let i = 0; i < analyzerResult.linter.length; i++) {
-		var warning = analyzerResult.linter[i];
-		const range = new vscode.Range(
-			new vscode.Position(warning.location.line, warning.location.column), // Início do aviso
-			new vscode.Position(warning.location.line, warning.location.column + warning.location.length) // Fim do aviso
-		);
-		const diagnostic = new vscode.Diagnostic(
-			range,
-			warning.message,
-			vscode.DiagnosticSeverity.Information
-		);
-
-		var array = diagnostics.get(warning.location.file);
-
-		if(!array) {
-			array = [];
-			console.log(`new array for ${warning.location.file}`);
-		}
-
-		array.push(diagnostic);
-
-		diagnostics.set(warning.location.file, array);
-	};
-	console.log(`errors: ${analyzerResult.linterErrors.length}`);
-	for(let i = 0; i < analyzerResult.linterErrors.length; i++) {
-		var error = analyzerResult.linterErrors[i];
-		const range = new vscode.Range(
-			new vscode.Position(error.location.line, error.location.column), // Início do aviso
-			new vscode.Position(error.location.line, error.location.column + error.location.length) // Fim do aviso
-		);
-		const diagnostic = new vscode.Diagnostic(
-			range,
-			error.message,
-			vscode.DiagnosticSeverity.Error
-		);
-
-		var array = diagnostics.get(error.location.file);
-
-		if(!array) {
-			array = [];
-			//console.log(`new array for ${error.location.file}`);
-		}
-
-		array.push(diagnostic);
-
-		diagnostics.set(error.location.file, array);
-	};
-
-	//console.log(`diagnostics: ${diagnostics.size}`);
-
-	diagnostics.forEach((value, key) => {
-		//console.log(`diagnostics for ${key}: ${value.length}`);
-		diagnosticCollection.set(vscode.Uri.file(key), value);
-	});
 };
-
-function setIntervalToUpdateDecorations(analyzerServer: AnalyzerServer) {
-	setTimeout(() => {
-		if(analyzerServer) {
-			updateDecorations(analyzerServer);
-		}
-		setIntervalToUpdateDecorations(analyzerServer);
-	}, 1000);
-}
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 	console.log('andy-analyzer extension activated 5');
+
 	var analyzerServer = new AnalyzerServer(context.extensionMode === vscode.ExtensionMode.Development);
 
 	var onError = (error: Error) => {
@@ -456,49 +347,110 @@ export function activate(context: vscode.ExtensionContext) {
 
 		return;
 	}
-
 	// Note: Error is only handled if the server could be started
 	analyzerServer.onError = onError;
 
 	console.log('andy-analyzer server started');
 
-	// const onDidChangeActiveTextEditor = vscode.window.onDidChangeActiveTextEditor((editor) => {
-	// 	updateCurrentDocumentDecorations();
-	// });
+	const legend = new vscode.SemanticTokensLegend(
+		['class', 'function', 'variable', 'keyword', 'string', 'number', 'comment', 'boolean', 'constant', 'preprocessor'],
+		['declaration', 'defaultLibrary']
+	);
 
-	// const onDidChangeTextDocument = vscode.workspace.onDidChangeTextDocument((event) => {
-	// 	updateCurrentDocumentDecorations();
-	// });
+	const tokenCache = new Map<string, vscode.SemanticTokens>();
 
-	//context.subscriptions.push(onDidChangeActiveTextEditor, onDidChangeTextDocument, registerDefinitionProvider);
+	const provider: vscode.DocumentSemanticTokensProvider = {
+		async provideDocumentSemanticTokens(document: vscode.TextDocument): Promise<vscode.SemanticTokens> {
+			const builder = new vscode.SemanticTokensBuilder(legend);
 
-	setIntervalToUpdateDecorations(analyzerServer);
+			var isDebugMode = context.extensionMode === vscode.ExtensionMode.Development;
+			var analyzerPath = isDebugMode ? path.join(__dirname, '../..', 'andy-lang/build/andy-analyzer') : 'andy-analyzer';
+			console.log(`andy-analyzer path: ${analyzerPath}`);
+			console.log(`document: ${document.fileName}`);
+			var process = cp.spawn(analyzerPath, [document.fileName, '--stdin']);
 
-	const registerDefinitionProvider = vscode.languages.registerDefinitionProvider({ scheme: 'file', language: 'andy' }, new MyDefinitionProvider(analyzerServer));
+			if(!process || !process.pid) {
+				vscode.window.showErrorMessage('Unable to start analyzer server');
+				return Promise.resolve(new vscode.SemanticTokens(new Uint32Array(0)));
+			}
 
-	// const legend = new vscode.SemanticTokensLegend(
-    //     ['comment', 'preprocessor', 'literal', 'keyword' ]
-    // );
-	// const disposable = vscode.languages.registerDocumentSemanticTokensProvider(
-	// 	{ scheme: 'file', language: 'andy' },
-	// 	{
-	// 		provideDocumentSemanticTokens(document: vscode.TextDocument): vscode.ProviderResult<vscode.SemanticTokens> {
-	// 			console.log('provideDocumentSemanticTokens2');
-	// 			return analyzerServer.analyse(document).then((analyzerResult) => {
-	// 				const builder = new vscode.SemanticTokensBuilder();
+			process.stdin.write(document.getText());
+			process.stdin.end();
 
-	// 				for(const token of analyzerResult.tokens) {
-	// 					builder.push(token.location.line, token.location.column, token.location.length, legend.tokenTypes.indexOf(token.type));
-	// 				}
+			console.log('waiting for process to be readable');
 
-	// 				return builder.build();
-	// 			});
-	// 		}
-	// 	},
-	// 	legend
-	// );
+			await once(process.stdout, 'readable');
 
-	// context.subscriptions.push(disposable);
+			console.log('process is readable');
+
+			let chunk;
+			var data = "";
+			while(null !== (chunk = process.stdout.read())) {
+				data += chunk.toString();
+			}
+
+			console.log('read data from process');
+
+			data = data.toString();
+
+			console.log(`data: ${data}`);
+
+			var result = JSON.parse(data.toString());
+
+			console.log('parsed data from process');
+
+			for(const token of result.tokens) {
+				if(token.location.file == document.fileName) {
+					var location = token.location;
+					var start = location.start;
+					var end = location.end;
+
+					builder.push(
+						new vscode.Range(new vscode.Position(start.line, start.column), new vscode.Position(end.line, end.column)),
+						token.type,
+						token.modifier == "" ? [] : [token.modifier]
+					);
+				}
+			}
+
+			console.log('pushed tokens to builder');
+
+			// if(result.parser_errors.length > 0) {
+				// This result does not contain style for classes, functions and variables. Try to reuse the previous result.
+				// The previous result need to be verified to have the same tokens at the same location.
+				// if(tokenCache.has(document.fileName)) {
+					// const previous = tokenCache.get(document.fileName);
+					// if(previous) {
+						// TODO
+					// }
+				// }
+			// }
+
+			const built = builder.build();
+			tokenCache.set(document.fileName, built);
+			return built;
+		}
+	};
+
+	class AndyDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
+		resolveDebugConfiguration(
+			folder: vscode.WorkspaceFolder | undefined,
+			config: vscode.DebugConfiguration
+		): vscode.ProviderResult<vscode.DebugConfiguration> {
+			const program = config.program || 'application.andy';
+
+			const terminal = vscode.window.createTerminal("Andy");
+			terminal.sendText(`andy ${program}`);
+			terminal.show();
+			return null;
+		}
+	}
+
+	vscode.languages.registerDocumentSemanticTokensProvider(
+		{ language: 'andy' },
+		provider,
+		legend
+	);
 }
 
 // This method is called when your extension is deactivated

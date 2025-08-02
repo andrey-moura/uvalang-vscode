@@ -21,6 +21,12 @@ This extensions provides syntax highlight, definitions navigation and build and 
 
 ## Release Notes
 
+### 0.1.2
+
+Use andy-analyzer
+New language icons
+Several new styling
+
 ### 0.1.1
 
 Use andylang-analyser instead of andylang-analyzer
